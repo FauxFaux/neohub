@@ -1,4 +1,7 @@
+mod live_data;
+
 use std::collections::HashMap;
+use std::time::Duration;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -11,6 +14,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{
     connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream,
 };
+
+pub use live_data::LiveData;
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -77,22 +82,25 @@ impl Client {
 
     pub async fn command_void<T: DeserializeOwned>(&mut self, command: &str) -> Result<T> {
         let resp = self.raw_message(&format!("{{'{}':0}}", command)).await?;
-        Ok(serde_json::from_str(&resp)?)
+        Ok(serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))?)
     }
 
     pub async fn get_profiles(&mut self) -> Result<HashMap<String, Profile>> {
         Ok(self.command_void("GET_PROFILES").await?)
     }
 
-    pub async fn get_live_data(&mut self) -> Result<Value> {
+    pub async fn get_live_data(&mut self) -> Result<LiveData> {
         Ok(self.command_void("GET_LIVE_DATA").await?)
     }
 }
 
 #[derive(Deserialize, Debug)]
 struct CommandResponse {
-    // command_id: i64,
-    // device_id: "mac address",
+    // we always send a fixed value (1)
+    command_id: i64,
+
+    // mac-address-like string
+    device_id: String,
 
     // hm_set_command_response
     message_type: String,
