@@ -3,6 +3,7 @@ use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
+use serde_json::Value;
 
 fn now() -> u128 {
     SystemTime::now()
@@ -19,7 +20,7 @@ async fn main() -> Result<()> {
     let mut writer = zstd::Encoder::new(writer, 9)?;
     let mut client = neohub::Client::from_env()?;
     loop {
-        let live_data = client.get_live_data().await?;
+        let live_data: Value = client.command_void(neohub::commands::GET_LIVE_DATA).await?;
         writer.write_all(format!("{} ", now()).as_bytes())?;
         serde_json::to_writer(&mut writer, &live_data)?;
         writer.write_all(b"\n")?;

@@ -1,7 +1,7 @@
+pub mod commands;
 mod live_data;
 
 use std::collections::HashMap;
-use std::time::Duration;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -89,12 +89,28 @@ impl Client {
         Ok(serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))?)
     }
 
-    pub async fn get_profiles(&mut self) -> Result<HashMap<String, Profile>> {
-        Ok(self.command_void("GET_PROFILES").await?)
+    pub async fn command_str<T: DeserializeOwned>(
+        &mut self,
+        command: &str,
+        arg: &str,
+    ) -> Result<T> {
+        let resp = self
+            .raw_message(&format!("{{'{}':'{}'}}", command, arg))
+            .await?;
+        Ok(serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))?)
     }
 
-    pub async fn get_live_data(&mut self) -> Result<LiveData> {
-        Ok(self.command_void("GET_LIVE_DATA").await?)
+    pub async fn disconnect(&mut self) -> Result<()> {
+        let conn = match self.conn.as_mut() {
+            None => return Ok(()),
+            Some(conn) => conn,
+        };
+
+        let shutdown_result = conn.close(None).await;
+
+        self.conn = None;
+
+        Ok(shutdown_result?)
     }
 }
 
@@ -116,9 +132,11 @@ struct CommandResponse {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Profile {
     // 1-..
-    pub PROFILE_ID: u16,
+    #[serde(rename = "PROFILE_ID")]
+    pub profile_id: u16,
     // 0
-    pub P_TYPE: u16,
+    #[serde(rename = "P_TYPE")]
+    pub p_type: u16,
     pub info: ProfileInfo,
     pub name: String,
 }
@@ -151,6 +169,6 @@ async fn connect(url: &str) -> Result<WsStream> {
             .danger_accept_invalid_certs(true)
             .build()?,
     );
-    let (mut conn, _) = connect_async_tls_with_config(url, None, Some(connector)).await?;
+    let (conn, _) = connect_async_tls_with_config(url, None, Some(connector)).await?;
     Ok(conn)
 }
