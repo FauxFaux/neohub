@@ -26,6 +26,10 @@ pub struct Client {
 }
 
 impl Client {
+    pub fn from_env() -> Result<Self> {
+        Self::new(std::env::var("NEOHUB_URL")?, std::env::var("NEOHUB_TOKEN")?)
+    }
+
     pub fn new(url: impl ToString, token: impl ToString) -> Result<Self> {
         Ok(Client {
             url: url.to_string(),
