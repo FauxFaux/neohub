@@ -1,6 +1,13 @@
 [package]
 name = "neohub"
 version = "0.1.0"
+
+description = "Heatmiser neoHub v3 API client (websocket/token aware)"
+repository = "https://github.com/FauxFaux/neohub"
+readme = "README.md"
+categories = ["api-bindings"]
+license = "MIT OR Apache-2.0"
+
 edition = "2021"
 
 [dependencies]
