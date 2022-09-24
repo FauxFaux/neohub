@@ -1,8 +1,6 @@
 pub mod commands;
 mod live_data;
 
-use std::collections::HashMap;
-
 use anyhow::{anyhow, ensure, Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
@@ -46,7 +44,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn raw_message(&mut self, msg: &str) -> Result<String> {
+    pub async fn raw_message(&mut self, msg: &str) -> Result<(String, String)> {
         let middle = serde_json::to_string(&json!({
             "token": self.token,
             "COMMANDS": [
@@ -77,15 +75,15 @@ impl Client {
         let resp: CommandResponse =
             serde_json::from_slice(&buf).with_context(|| "JSON-deserializing response")?;
         ensure!(
-            resp.message_type == "hm_set_command_response",
-            "unexpected response type: {:?}",
+            resp.message_type == "hm_set_command_response" && resp.command_id == 1,
+            "unexpected response type or id: {:?}",
             resp
         );
-        Ok(resp.response)
+        Ok((resp.device_id, resp.response))
     }
 
     pub async fn command_void<T: DeserializeOwned>(&mut self, command: &str) -> Result<T> {
-        let resp = self.raw_message(&format!("{{'{}':0}}", command)).await?;
+        let (_, resp) = self.raw_message(&serialise_void(command)).await?;
         Ok(serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))?)
     }
 
@@ -94,10 +92,22 @@ impl Client {
         command: &str,
         arg: &str,
     ) -> Result<T> {
-        let resp = self
+        let (_, resp) = self
             .raw_message(&format!("{{'{}':'{}'}}", command, arg))
             .await?;
         Ok(serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))?)
+    }
+
+    pub async fn identify(&mut self) -> Result<Identity> {
+        let (device_id, resp) = self.raw_message(&serialise_void("FIRMWARE")).await?;
+        let firmware: Value = serde_json::from_str(&resp)?;
+        Ok(Identity {
+            device_id,
+            firmware_version: firmware
+                .get("firmware version")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned),
+        })
     }
 
     pub async fn disconnect(&mut self) -> Result<()> {
@@ -114,6 +124,11 @@ impl Client {
     }
 }
 
+#[inline]
+fn serialise_void(command: &str) -> String {
+    format!("{{'{}':0}}", command)
+}
+
 #[derive(Deserialize, Debug)]
 struct CommandResponse {
     // we always send a fixed value (1)
@@ -127,6 +142,12 @@ struct CommandResponse {
 
     // json, in a string
     response: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Identity {
+    pub device_id: String,
+    pub firmware_version: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

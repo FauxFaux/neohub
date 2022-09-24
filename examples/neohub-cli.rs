@@ -5,6 +5,7 @@ use serde_json::Value;
 async fn main() -> Result<()> {
     pretty_env_logger::init();
     let mut client = neohub::Client::from_env()?;
+    println!("{:?}", client.identify().await?);
     let mut rl = rustyline::Editor::<()>::new()?;
     loop {
         let command = rl.readline(">> ")?;
