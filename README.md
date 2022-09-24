@@ -5,6 +5,14 @@ A (currently) low-level wrapper for the neoHub websocket API.
 Upstream docs are available, with a free account, from https://dev.heatmiser.com/.
 They are not very complete or accurate.
 
+
+### Warning
+
+All certificate information is ignored. The hub does not have a valid cert, and
+the client is set up to accept this. You must not trust data transmitted over an
+untrusted network.
+
+
 ### Usage
 
 Find your hub's address. Supposedly they respond to broadcast, but mine won't:

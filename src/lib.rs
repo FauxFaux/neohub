@@ -1,8 +1,13 @@
 pub mod commands;
 mod live_data;
 
+use std::sync::Arc;
+use std::time::SystemTime;
+
 use anyhow::{anyhow, ensure, Context, Result};
 use futures_util::{SinkExt, StreamExt};
+use rustls::client::{ServerCertVerified, ServerCertVerifier};
+use rustls::{Certificate, ServerName};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -184,12 +189,29 @@ pub struct ProfileInfoDay {
     sleep: TempSpec,
 }
 
+struct IgnoreAllCertificateSecurity;
+
+impl ServerCertVerifier for IgnoreAllCertificateSecurity {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &Certificate,
+        _intermediates: &[Certificate],
+        _server_name: &ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: SystemTime,
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+}
+
 async fn connect(url: &str) -> Result<WsStream> {
-    let connector = Connector::NativeTls(
-        native_tls::TlsConnector::builder()
-            .danger_accept_invalid_certs(true)
-            .build()?,
-    );
+    let connector = Connector::Rustls(Arc::new(
+        rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(Arc::new(IgnoreAllCertificateSecurity))
+            .with_no_client_auth(),
+    ));
     let (conn, _) = connect_async_tls_with_config(url, None, Some(connector)).await?;
     Ok(conn)
 }
