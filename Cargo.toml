@@ -1,6 +1,6 @@
 [package]
 name = "neohub"
-version = "0.2.0"
+version = "0.2.1"
 
 description = "Heatmiser neoHub v3 API client (websocket/token aware)"
 repository = "https://github.com/FauxFaux/neohub"
