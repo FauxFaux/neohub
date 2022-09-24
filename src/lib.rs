@@ -6,6 +6,7 @@ use std::time::SystemTime;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use futures_util::{SinkExt, StreamExt};
+use log::debug;
 use rustls::client::{ServerCertVerified, ServerCertVerifier};
 use rustls::{Certificate, ServerName};
 use serde::de::DeserializeOwned;
@@ -63,6 +64,7 @@ impl Client {
         let to_send = serde_json::to_string(&outer)?;
 
         self.ensure_connected().await?;
+        debug!("sending: {}", to_send);
         let conn = self
             .conn
             .as_mut()
@@ -71,6 +73,7 @@ impl Client {
         conn.feed(Message::Text(to_send)).await?;
         conn.flush().await?;
 
+        debug!("receiving");
         let buf = conn
             .next()
             .await
@@ -206,6 +209,7 @@ impl ServerCertVerifier for IgnoreAllCertificateSecurity {
 }
 
 async fn connect(url: &str) -> Result<WsStream> {
+    debug!("attempting connection");
     let connector = Connector::Rustls(Arc::new(
         rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -213,5 +217,6 @@ async fn connect(url: &str) -> Result<WsStream> {
             .with_no_client_auth(),
     ));
     let (conn, _) = connect_async_tls_with_config(url, None, Some(connector)).await?;
+    debug!("connected");
     Ok(conn)
 }
