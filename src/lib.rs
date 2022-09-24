@@ -89,7 +89,7 @@ impl Client {
 
     pub async fn command_void<T: DeserializeOwned>(&mut self, command: &str) -> Result<T> {
         let (_, resp) = self.raw_message(&serialise_void(command)).await?;
-        Ok(serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))?)
+        serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))
     }
 
     pub async fn command_str<T: DeserializeOwned>(
@@ -100,7 +100,7 @@ impl Client {
         let (_, resp) = self
             .raw_message(&format!("{{'{}':'{}'}}", command, arg))
             .await?;
-        Ok(serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))?)
+        serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))
     }
 
     pub async fn identify(&mut self) -> Result<Identity> {
