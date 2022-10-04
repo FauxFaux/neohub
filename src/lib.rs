@@ -43,11 +43,11 @@ impl Client {
     }
 
     #[inline]
-    async fn ensure_connected(&mut self) -> Result<()> {
+    async fn ensure_connected(&mut self) -> Result<&mut WsStream> {
         if self.conn.is_none() {
             self.conn = Some(connect(&self.url).await?);
         }
-        Ok(())
+        Ok(self.conn.as_mut().expect("we just set it"))
     }
 
     pub async fn raw_message(&mut self, msg: &str) -> Result<(String, String)> {
@@ -63,12 +63,8 @@ impl Client {
         });
         let to_send = serde_json::to_string(&outer)?;
 
-        self.ensure_connected().await?;
+        let conn = self.ensure_connected().await?;
         debug!("sending: {}", to_send);
-        let conn = self
-            .conn
-            .as_mut()
-            .expect("ensure_connected contract violated");
 
         conn.feed(Message::Text(to_send)).await?;
         conn.flush().await?;
