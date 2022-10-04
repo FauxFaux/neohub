@@ -2,7 +2,7 @@ pub mod commands;
 mod live_data;
 
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, ensure, Context, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
 use tokio::net::TcpStream;
+use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{
     connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream,
@@ -27,6 +28,20 @@ pub struct Client {
     url: String,
     token: String,
     conn: Option<WsStream>,
+    opts: Opts,
+}
+
+#[non_exhaustive]
+pub struct Opts {
+    pub timeout: Duration,
+}
+
+impl Default for Opts {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(15),
+        }
+    }
 }
 
 impl Client {
@@ -35,10 +50,15 @@ impl Client {
     }
 
     pub fn new(url: impl ToString, token: impl ToString) -> Result<Self> {
+        Self::new_opts(url, token, Opts::default())
+    }
+
+    pub fn new_opts(url: impl ToString, token: impl ToString, opts: Opts) -> Result<Self> {
         Ok(Client {
             url: url.to_string(),
             token: token.to_string(),
             conn: None,
+            opts,
         })
     }
 
@@ -51,6 +71,12 @@ impl Client {
     }
 
     pub async fn raw_message(&mut self, msg: &str) -> Result<(String, String)> {
+        timeout(self.opts.timeout, self.raw_message_inner(msg))
+            .await
+            .with_context(|| "timeout sending raw message")?
+    }
+
+    async fn raw_message_inner(&mut self, msg: &str) -> Result<(String, String)> {
         let middle = serde_json::to_string(&json!({
             "token": self.token,
             "COMMANDS": [
@@ -103,7 +129,10 @@ impl Client {
     }
 
     pub async fn identify(&mut self) -> Result<Identity> {
-        let (device_id, resp) = self.raw_message(&serialise_void("FIRMWARE")).await?;
+        let (device_id, resp) = self
+            .raw_message(&serialise_void("FIRMWARE"))
+            .await
+            .with_context(|| "requesting FIRMWARE version")?;
         let firmware: Value = serde_json::from_str(&resp)?;
         Ok(Identity {
             device_id,
@@ -120,11 +149,13 @@ impl Client {
             Some(conn) => conn,
         };
 
-        let shutdown_result = conn.close(None).await;
+        let shutdown_result = timeout(self.opts.timeout, conn.close(None))
+            .await
+            .with_context(|| "timeout disconnecting");
 
         self.conn = None;
 
-        Ok(shutdown_result?)
+        Ok(shutdown_result??)
     }
 }
 
