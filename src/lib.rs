@@ -31,7 +31,7 @@ pub struct Client {
 
 impl Client {
     pub fn from_env() -> Result<Self> {
-        Self::new(std::env::var("NEOHUB_URL")?, std::env::var("NEOHUB_TOKEN")?)
+        Self::new(env_var("NEOHUB_URL")?, env_var("NEOHUB_TOKEN")?)
     }
 
     pub fn new(url: impl ToString, token: impl ToString) -> Result<Self> {
@@ -215,4 +215,8 @@ async fn connect(url: &str) -> Result<WsStream> {
     let (conn, _) = connect_async_tls_with_config(url, None, Some(connector)).await?;
     debug!("connected");
     Ok(conn)
+}
+
+fn env_var(key: &'static str) -> Result<String> {
+    std::env::var(key).with_context(|| anyhow!("env var required: {key:?}"))
 }
