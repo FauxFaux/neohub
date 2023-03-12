@@ -49,14 +49,14 @@ impl Client {
         Self::new(env_var("NEOHUB_URL")?, env_var("NEOHUB_TOKEN")?)
     }
 
-    pub fn new(url: impl ToString, token: impl ToString) -> Result<Self> {
+    pub fn new(url: impl Into<String>, token: impl Into<String>) -> Result<Self> {
         Self::new_opts(url, token, Opts::default())
     }
 
-    pub fn new_opts(url: impl ToString, token: impl ToString, opts: Opts) -> Result<Self> {
-        Ok(Client {
-            url: url.to_string(),
-            token: token.to_string(),
+    pub fn new_opts(url: impl Into<String>, token: impl Into<String>, opts: Opts) -> Result<Self> {
+        Ok(Self {
+            url: url.into(),
+            token: token.into(),
             conn: None,
             opts,
         })
@@ -130,7 +130,7 @@ impl Client {
             device_id,
             firmware_version: firmware
                 .get("firmware version")
-                .and_then(|v| v.as_str())
+                .and_then(Value::as_str)
                 .map(str::to_owned),
         })
     }
