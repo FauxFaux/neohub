@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use serde_json::Value;
 
 #[tokio::main]
@@ -19,12 +19,12 @@ async fn main() -> Result<()> {
         if command.is_empty() {
             break;
         };
-        let parts = command.split(' ').collect::<Vec<_>>();
-        let result: Value = match parts.len() {
-            1 => client.command_void(parts[0]).await?,
-            2 => client.command_str(parts[0], parts[1]).await?,
-            _ => bail!("unable to handle multiple arguments"),
-        };
+        let mut parts = command.split(' ');
+        let cmd = parts.next().expect("command isn't empty");
+        let args: Vec<_> = parts.collect();
+
+        let result: Value = client.command(cmd, &args).await?;
+
         println!("{}", serde_json::to_string_pretty(&result)?);
     }
 

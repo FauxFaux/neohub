@@ -34,7 +34,9 @@ export NEOHUB_TOKEN=69696969-6969-4969-6969-696969696969
 Then, you can use the library:
 ```rust
 let mut client = Client::from_env()?;
-let result: Value = client.command_void(commands::GET_LIVE_DATA).await?;
+let cmd = commands::GET_LIVE_DATA;
+let args = &[];
+let result: Value = client.command(cmd, args).await?;
 println!("{}", result.to_string()));
 ```
 

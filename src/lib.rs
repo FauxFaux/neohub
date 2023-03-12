@@ -70,24 +70,27 @@ impl Client {
         Ok(self.conn.as_mut().expect("we just set it"))
     }
 
-    pub async fn raw_message(&mut self, msg: &str) -> Result<(String, String)> {
-        timeout(self.opts.timeout, self.raw_message_inner(msg))
+    pub async fn raw_command(&mut self, cmd: &str, args: &[&str]) -> Result<(String, String)> {
+        timeout(self.opts.timeout, self.raw_command_inner(cmd, args))
             .await
             .with_context(|| "timeout sending raw message")?
     }
 
-    async fn raw_message_inner(&mut self, msg: &str) -> Result<(String, String)> {
-        let middle = serde_json::to_string(&json!({
-            "token": self.token,
-            "COMMANDS": [
-                { "COMMAND": msg, "COMMANDID": 1, }
-            ]
-        }))?;
-        let outer = json!({
+    async fn raw_command_inner(&mut self, cmd: &str, args: &[&str]) -> Result<(String, String)> {
+        let payload = json!({
             "message_type": "hm_get_command_queue",
-            "message": middle,
+            "message": {
+                "token": self.token,
+                "COMMANDS": [
+                    {
+                        "COMMAND": {cmd: args},
+                        "COMMANDID": 1,
+                    }
+                ]
+            }
         });
-        let to_send = serde_json::to_string(&outer)?;
+
+        let to_send = serde_json::to_string(&payload)?;
 
         let conn = self.ensure_connected().await?;
         debug!("sending: {}", to_send);
@@ -112,25 +115,14 @@ impl Client {
         Ok((resp.device_id, resp.response))
     }
 
-    pub async fn command_void<T: DeserializeOwned>(&mut self, command: &str) -> Result<T> {
-        let (_, resp) = self.raw_message(&serialise_void(command)).await?;
-        serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))
-    }
-
-    pub async fn command_str<T: DeserializeOwned>(
-        &mut self,
-        command: &str,
-        arg: &str,
-    ) -> Result<T> {
-        let (_, resp) = self
-            .raw_message(&format!("{{'{}':'{}'}}", command, arg))
-            .await?;
+    pub async fn command<T: DeserializeOwned>(&mut self, cmd: &str, args: &[&str]) -> Result<T> {
+        let (_, resp) = self.raw_command(cmd, args).await?;
         serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))
     }
 
     pub async fn identify(&mut self) -> Result<Identity> {
         let (device_id, resp) = self
-            .raw_message(&serialise_void("FIRMWARE"))
+            .raw_command("FIRMWARE", &[])
             .await
             .with_context(|| "requesting FIRMWARE version")?;
         let firmware: Value = serde_json::from_str(&resp)?;
@@ -157,11 +149,6 @@ impl Client {
 
         Ok(shutdown_result??)
     }
-}
-
-#[inline]
-fn serialise_void(command: &str) -> String {
-    format!("{{'{}':0}}", command)
 }
 
 #[derive(Deserialize, Debug)]
