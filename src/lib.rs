@@ -123,7 +123,7 @@ impl Client {
         arg: &str,
     ) -> Result<T> {
         let (_, resp) = self
-            .raw_message(&format!("{{'{}':'{}'}}", command, arg))
+            .raw_message(&format!("{{'{command}':'{arg}'}}"))
             .await?;
         serde_json::from_str(&resp).with_context(|| anyhow!("reading {:?}", resp))
     }
@@ -161,7 +161,7 @@ impl Client {
 
 #[inline]
 fn serialise_void(command: &str) -> String {
-    format!("{{'{}':0}}", command)
+    format!("{{'{command}':0}}")
 }
 
 #[derive(Deserialize, Debug)]
