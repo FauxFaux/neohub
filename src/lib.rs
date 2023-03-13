@@ -24,54 +24,51 @@ pub use live_data::LiveData;
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
-pub struct Client {
+pub struct Builder {
     url: String,
     token: String,
-    conn: Option<WsStream>,
-    opts: Opts,
+    timeout: Duration,
 }
 
-#[non_exhaustive]
-pub struct Opts {
-    pub timeout: Duration,
-}
-
-impl Default for Opts {
-    fn default() -> Self {
-        Self {
-            timeout: Duration::from_secs(15),
-        }
+impl Builder {
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
     }
+
+    pub async fn connect(self) -> Result<Client> {
+        let conn = connect(&self.url).await?;
+        Ok(Client {
+            token: self.token,
+            conn,
+            timeout: self.timeout,
+        })
+    }
+}
+
+pub struct Client {
+    token: String,
+    conn: WsStream,
+    timeout: Duration,
 }
 
 impl Client {
-    pub fn from_env() -> Result<Self> {
-        Self::new(env_var("NEOHUB_URL")?, env_var("NEOHUB_TOKEN")?)
+    pub fn from_env() -> Result<Builder> {
+        let url = env_var("NEOHUB_URL")?;
+        let token = env_var("NEOHUB_TOKEN")?;
+        Ok(Self::build(url, token))
     }
 
-    pub fn new(url: impl ToString, token: impl ToString) -> Result<Self> {
-        Self::new_opts(url, token, Opts::default())
-    }
-
-    pub fn new_opts(url: impl ToString, token: impl ToString, opts: Opts) -> Result<Self> {
-        Ok(Client {
-            url: url.to_string(),
-            token: token.to_string(),
-            conn: None,
-            opts,
-        })
-    }
-
-    #[inline]
-    async fn ensure_connected(&mut self) -> Result<&mut WsStream> {
-        if self.conn.is_none() {
-            self.conn = Some(connect(&self.url).await?);
+    pub fn build(url: impl Into<String>, token: impl Into<String>) -> Builder {
+        Builder {
+            url: url.into(),
+            token: token.into(),
+            timeout: Duration::from_secs(15),
         }
-        Ok(self.conn.as_mut().expect("we just set it"))
     }
 
     pub async fn raw_message(&mut self, msg: &str) -> Result<(String, String)> {
-        timeout(self.opts.timeout, self.raw_message_inner(msg))
+        timeout(self.timeout, self.raw_message_inner(msg))
             .await
             .with_context(|| "timeout sending raw message")?
     }
@@ -89,14 +86,14 @@ impl Client {
         });
         let to_send = serde_json::to_string(&outer)?;
 
-        let conn = self.ensure_connected().await?;
         debug!("sending: {}", to_send);
 
-        conn.feed(Message::Text(to_send)).await?;
-        conn.flush().await?;
+        self.conn.feed(Message::Text(to_send)).await?;
+        self.conn.flush().await?;
 
         debug!("receiving");
-        let buf = conn
+        let buf = self
+            .conn
             .next()
             .await
             .ok_or_else(|| anyhow!("no response received to command"))?
@@ -143,17 +140,10 @@ impl Client {
         })
     }
 
-    pub async fn disconnect(&mut self) -> Result<()> {
-        let conn = match self.conn.as_mut() {
-            None => return Ok(()),
-            Some(conn) => conn,
-        };
-
-        let shutdown_result = timeout(self.opts.timeout, conn.close(None))
+    pub async fn disconnect(mut self) -> Result<()> {
+        let shutdown_result = timeout(self.timeout, self.conn.close(None))
             .await
             .with_context(|| "timeout disconnecting");
-
-        self.conn = None;
 
         Ok(shutdown_result??)
     }
