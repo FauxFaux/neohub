@@ -243,7 +243,7 @@ async fn connect(url: &str) -> Result<WsStream> {
             .with_custom_certificate_verifier(Arc::new(IgnoreAllCertificateSecurity))
             .with_no_client_auth(),
     ));
-    let (conn, _) = connect_async_tls_with_config(url, None, Some(connector)).await?;
+    let (conn, _) = connect_async_tls_with_config(url, None, true, Some(connector)).await?;
     debug!("connected");
     Ok(conn)
 }
