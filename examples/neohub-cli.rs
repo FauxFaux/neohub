@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use rustyline::config::Configurer;
 use serde_json::Value;
 
 #[tokio::main]
@@ -13,7 +14,8 @@ async fn main() -> Result<()> {
             .await
             .with_context(|| "initial connection failed")?
     );
-    let mut rl = rustyline::Editor::<()>::new()?;
+    let mut rl = rustyline::DefaultEditor::new()?;
+    rl.set_auto_add_history(true);
     loop {
         let command = rl.readline(">> ")?;
         if command.is_empty() {
