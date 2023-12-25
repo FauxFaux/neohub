@@ -2,13 +2,16 @@ pub mod commands;
 mod live_data;
 
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use log::debug;
-use rustls::client::{ServerCertVerified, ServerCertVerifier};
-use rustls::{Certificate, ServerName};
+use rustls::client::danger;
+use rustls::crypto::ring::default_provider;
+use rustls::crypto::{verify_tls12_signature, verify_tls13_signature, WebPkiSupportedAlgorithms};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{DigitallySignedStruct, Error, SignatureScheme};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -219,19 +222,42 @@ pub struct ProfileInfoDay {
     sleep: TempSpec,
 }
 
-struct IgnoreAllCertificateSecurity;
+#[derive(Debug)]
+struct IgnoreAllCertificateSecurity(WebPkiSupportedAlgorithms);
 
-impl ServerCertVerifier for IgnoreAllCertificateSecurity {
+impl danger::ServerCertVerifier for IgnoreAllCertificateSecurity {
     fn verify_server_cert(
         &self,
-        _end_entity: &Certificate,
-        _intermediates: &[Certificate],
-        _server_name: &ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
         _ocsp_response: &[u8],
-        _now: SystemTime,
-    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
-        Ok(ServerCertVerified::assertion())
+        _now: UnixTime,
+    ) -> std::result::Result<danger::ServerCertVerified, Error> {
+        Ok(danger::ServerCertVerified::assertion())
+    }
+
+    // copy-paste of WebPkiServerVerifier, the only other implementation of this trait
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<danger::HandshakeSignatureValid, Error> {
+        verify_tls12_signature(message, cert, dss, &self.0)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<danger::HandshakeSignatureValid, Error> {
+        verify_tls13_signature(message, cert, dss, &self.0)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.0.supported_schemes()
     }
 }
 
@@ -239,8 +265,10 @@ async fn connect(url: &str) -> Result<WsStream> {
     debug!("attempting connection");
     let connector = Connector::Rustls(Arc::new(
         rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_custom_certificate_verifier(Arc::new(IgnoreAllCertificateSecurity))
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(IgnoreAllCertificateSecurity(
+                default_provider().signature_verification_algorithms,
+            )))
             .with_no_client_auth(),
     ));
     let (conn, _) = connect_async_tls_with_config(url, None, true, Some(connector)).await?;
