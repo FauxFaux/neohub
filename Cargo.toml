@@ -22,6 +22,6 @@ tokio-tungstenite = { version = "0.20", features = ["rustls-tls-native-roots"] }
 
 [dev-dependencies]
 pretty_env_logger = "0.5"
-rustyline = "12"
+rustyline = "13"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 zstd = "0.13"
