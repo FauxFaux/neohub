@@ -8,6 +8,8 @@ readme = "README.md"
 categories = ["api-bindings"]
 license = "MIT OR Apache-2.0"
 
+rust-version = "1.60.0"
+
 edition = "2021"
 
 [dependencies]
