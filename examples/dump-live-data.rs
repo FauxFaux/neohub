@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     let unix_millis = now();
     let writer = fs::File::create(format!("logs.{unix_millis}.jsonl.zstd"))?;
     let mut writer = zstd::Encoder::new(writer, 9)?;
-    let mut client = neohub::Client::from_env()?;
+    let mut client = neohub::Client::from_env()?.connect().await?;
     loop {
         let live_data: Value = client.command_void(neohub::commands::GET_LIVE_DATA).await?;
         writer.write_all(format!("{} ", now()).as_bytes())?;
