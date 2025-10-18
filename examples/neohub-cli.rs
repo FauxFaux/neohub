@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use rustyline::config::Configurer;
 use serde_json::Value;
 
