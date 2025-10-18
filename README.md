@@ -5,6 +5,12 @@ A (currently) low-level wrapper for the neoHub websocket API.
 Upstream docs are available, with a free account, from https://dev.heatmiser.com/.
 They are not very complete or accurate.
 
+### Status
+
+The original author of this library no longer has hardware to test against, nor
+any reason to continue with development. General library upgrades may happen, but
+no new features or bug fixes can be expected, as they cannot be tested.
+
 
 ### Warning
 
